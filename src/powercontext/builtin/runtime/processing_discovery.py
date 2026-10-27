@@ -24,6 +24,7 @@ from powercontext.builtin.persistence.database import AsyncDatabase
 from powercontext.builtin.persistence.processing_intents import ArtifactProcessingIntentRepository
 from powercontext.builtin.persistence.supervision import ArtifactProcessingFence, ArtifactProcessingLeaseRepository
 from powercontext.builtin.persistence.tables import PROFILE_POLICIES_TABLE, SOURCE_JOURNAL_HEADS_TABLE
+from powercontext.builtin.runtime.processing_reconcile import PendingReconcile
 
 
 async def enabled_profile_scopes(connection: AsyncConnection, scope_ids: tuple[str, ...]) -> frozenset[str]:
@@ -48,12 +49,27 @@ async def enabled_profile_scopes(connection: AsyncConnection, scope_ids: tuple[s
 class SourceProcessingPendingProvider:
     """Inspect journal metadata, never Source bodies, prompts, or models."""
 
-    def __init__(self, database: AsyncDatabase, binding_name: str, artifact_family: str) -> None:
+    def __init__(
+        self,
+        database: AsyncDatabase,
+        binding_name: str,
+        artifact_family: str,
+        *,
+        count_threshold: int | None = None,
+    ) -> None:
         self._database = database
         self._binding = binding_name
         self._family = artifact_family
+        self._count_threshold = count_threshold
 
-    async def reconcile(self, after_scope_id: str | None, limit: int, *, fence: ArtifactProcessingFence) -> str | None:
+    async def reconcile(
+        self,
+        after_scope_id: str | None,
+        limit: int,
+        *,
+        fence: ArtifactProcessingFence,
+        lock_intents: bool = True,
+    ) -> PendingReconcile:
         heads = SOURCE_JOURNAL_HEADS_TABLE
         statement = select(heads.c.scope_id, heads.c.position).order_by(heads.c.scope_id).limit(limit)
         if after_scope_id is not None:
@@ -66,11 +82,22 @@ class SourceProcessingPendingProvider:
             rows = (await connection.execute(statement)).all()
             intents = ArtifactProcessingIntentRepository()
             cursors = SourceCursorRepository()
+            requested = False
             for scope, high in rows:
                 cursor = await cursors.load(connection, scope, self._binding)
-                if int(high) <= (0 if cursor is None else cursor.cursor.sequence):
+                consumed = 0 if cursor is None else cursor.cursor.sequence
+                if int(high) <= consumed:
                     continue
-                intent = await intents.load(connection, scope, self._binding, for_update=True)
+                intent = await intents.load(connection, scope, self._binding, for_update=lock_intents)
+                if self._count_threshold is not None and int(high) - consumed >= self._count_threshold:
+                    # The count condition accepts its own invocation, so a busy Scope
+                    # starts processing without waiting for the time condition.
+                    if intent is None or intent.requested_generation <= intent.handled_generation:
+                        await intents.request(connection, scope, self._binding)
+                        requested = True
                 if intent is None or intent.dirty_generation == intent.clean_generation:
                     await intents.mark_dirty(connection, scope, self._binding)
-        return str(rows[-1][0]) if len(rows) == limit else None
+        return PendingReconcile(
+            next_scope_id=str(rows[-1][0]) if len(rows) == limit else None,
+            requested=requested,
+        )

@@ -67,11 +67,13 @@ from powercontext.builtin.runtime.processing_contracts import (
     ArtifactProcessingWorkerOutcome,
     WorkerEntrypoint,
 )
+from powercontext.builtin.runtime.processing_reconcile import PendingReconcile
 from powercontext.builtin.runtime.protocols import RuntimeTracing
 
 logger = logging.getLogger(__name__)
 _OCEANBASE_TICK_SECONDS = 1.0
 _OCEANBASE_LEASE_SECONDS = 15.0
+_COUNT_TRIGGER_POLL_SECONDS = 1.0
 _RETRY_BASE_SECONDS = 30.0
 _RETRY_CAP_SECONDS = 1800.0
 _CONTROL_CONFLICT_RETRY_SECONDS = 0.1
@@ -95,7 +97,14 @@ class ArtifactProcessingSupervisorStatus(StrEnum):
 class ArtifactProcessingPendingProvider(Protocol):
     """Reconcile a bounded page of domain progress without doing business work."""
 
-    async def reconcile(self, after_scope_id: str | None, limit: int, *, fence: ArtifactProcessingFence) -> str | None:
+    async def reconcile(
+        self,
+        after_scope_id: str | None,
+        limit: int,
+        *,
+        fence: ArtifactProcessingFence,
+        lock_intents: bool = True,
+    ) -> PendingReconcile:
         """Return the next keyset position, or None when this pass is complete."""
         ...
 
@@ -114,6 +123,9 @@ class ArtifactProcessingBinding:
     timezone: str = "Asia/Shanghai"
     config_prefix: str | None = None
     pending_provider: ArtifactProcessingPendingProvider | None = None
+    # A count threshold admits its own invocation as soon as enough new Source
+    # identities arrived, without waiting for the time condition.
+    source_count_threshold: int | None = None
     # Only automatic admission is filtered; already accepted requests retain
     # their own Worker authorization and domain completion semantics.
     automatic_scope_filter: Callable[[AsyncConnection, tuple[str, ...]], Awaitable[frozenset[str]]] | None = None
@@ -640,12 +652,26 @@ class ArtifactProcessingSupervisor:
         binding = state.binding
         loop = asyncio.get_running_loop()
         if not state.reconcile_complete and binding.pending_provider is not None:
-            state.reconcile_after = await binding.pending_provider.reconcile(
+            reconciled = await binding.pending_provider.reconcile(
                 state.reconcile_after, _DISCOVERY_PAGE_SIZE, fence=self._require_current_fence()
             )
-            state.reconcile_complete = state.reconcile_after is None
+            state.reconcile_after = reconciled.next_scope_id
+            state.reconcile_complete = reconciled.next_scope_id is None
+            if reconciled.requested:
+                # An accepted count-triggered invocation must be admitted now, not
+                # only after the next explicit notification.
+                state.discovery_pending = True
             if not state.reconcile_complete:
                 state.next_discovery_at = loop.time() + _DISCOVERY_PAGE_DELAY_SECONDS
+        elif binding.source_count_threshold is not None and binding.pending_provider is not None:
+            # A count-triggered Family keeps reconciling so it can notice that
+            # enough new Source identities arrived.
+            reconciled = await binding.pending_provider.reconcile(
+                None, _DISCOVERY_PAGE_SIZE, fence=self._require_current_fence(), lock_intents=False
+            )
+            if reconciled.requested:
+                state.discovery_pending = True
+            state.next_discovery_at = loop.time() + _COUNT_TRIGGER_POLL_SECONDS
         else:
             state.reconcile_complete = True
         # Alternate discovery channels so explicit traffic cannot monopolize admission.
@@ -1094,6 +1120,10 @@ class ArtifactProcessingSupervisor:
             if state.next_schedule_at is not None:
                 deadlines.append(state.next_schedule_at)
             if state.discovery_pending or state.scan_in_progress or not state.reconcile_complete or state.degraded:
+                deadlines.append(max(now, state.next_discovery_at))
+            elif state.binding.source_count_threshold is not None:
+                # A count-triggered Family polls for new Source identities even
+                # when no other work is pending.
                 deadlines.append(max(now, state.next_discovery_at))
         return None if not deadlines else max(0.001, min(deadlines) - now)
 

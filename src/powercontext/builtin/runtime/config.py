@@ -18,7 +18,7 @@ from __future__ import annotations
 
 import re
 from collections.abc import Mapping
-from typing import Any, Literal, Self
+from typing import Annotated, Any, Literal, Self
 
 from pydantic import (
     AnyHttpUrl,
@@ -99,6 +99,8 @@ class RuntimeConfig(BaseModel):
         normalized = dict(value)
         for old, new in (
             ("schedule_seconds", "memory_schedule_seconds"),
+            ("memory_source_schedule_seconds", "memory_schedule_seconds"),
+            ("topic_memory_source_schedule_seconds", "topic_memory_schedule_seconds"),
             ("profile_max_concurrency", "profile_max_workers"),
             ("artifact_processing_max_workers", "topic_memory_max_workers"),
             ("artifact_processing_worker_timeout_seconds", "topic_memory_worker_timeout_seconds"),
@@ -117,6 +119,10 @@ class RuntimeConfig(BaseModel):
                 normalized[new] = normalized[old]
             elif new in normalized:
                 normalized[old] = normalized[new]
+        # The source-schedule spellings are input aliases only, so they never
+        # reach the field validation that rejects unknown settings.
+        for alias in ("memory_source_schedule_seconds", "topic_memory_source_schedule_seconds"):
+            normalized.pop(alias, None)
         return normalized
 
     @field_validator(
@@ -137,6 +143,7 @@ class RuntimeConfig(BaseModel):
 
     scope_cache_size: int = Field(default=DEFAULT_SCOPE_CACHE_SIZE, ge=1)
     source_window_limit: int = Field(default=100, ge=1)
+    memory_source_count_threshold: Annotated[int, Field(strict=True, gt=0)] | None = None
     context_assembly_max_entries: int = Field(default=8, ge=1)
     memory_extraction_profile: MemoryExtractionProfile = MemoryExtractionProfile.CODING
     memory_rerank_enabled: bool = False
@@ -208,6 +215,7 @@ class RuntimeConfig(BaseModel):
     dream_budget: DreamBudget = Field(default_factory=DreamBudget)
     topic_memory_schedule_seconds: float | None = Field(default=None, gt=0)
     topic_memory_source_window_limit: int = Field(default=10, ge=1)
+    topic_memory_source_count_threshold: Annotated[int, Field(strict=True, gt=0)] | None = None
     topic_memory_history_max_candidates: int = Field(default=20, ge=1, le=MAX_TOPIC_MEMORY_SEARCH_LIMIT)
     topic_memory_history_rrf_threshold: int = Field(default=70, ge=0, le=100)
     topic_memory_history_min_candidates: int = Field(default=5, ge=1, le=MAX_TOPIC_MEMORY_SEARCH_LIMIT)
