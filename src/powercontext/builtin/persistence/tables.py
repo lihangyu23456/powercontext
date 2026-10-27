@@ -441,6 +441,29 @@ SOURCE_CURSORS_TABLE = Table(
     CheckConstraint("generation >= 0", name="ck_pc_source_cursors_generation_nonnegative"),
 )
 
+SOURCE_LIFECYCLE_NODES_TABLE = Table(
+    "pc_source_lifecycle_nodes",
+    SHARED_METADATA,
+    Column("scope_id", identity_string(MAX_SCOPE_ID_LENGTH), primary_key=True),
+    Column("node_id", identity_string(MAX_SOURCE_ID_LENGTH), primary_key=True),
+    Column("kind", identity_string(32), nullable=False),
+    Column("parents", _canonical_payload_type(), nullable=False),
+    Column("policy", identity_string(16), nullable=False),
+    Column("reference", _canonical_payload_type(), nullable=False),
+    Column("artifact_id", identity_string(MAX_ARTIFACT_ID_LENGTH), nullable=True),
+    Column("available", Integer, nullable=False),
+    Column("revision", BigInteger, nullable=False),
+    Column("sequence", BigInteger, nullable=False),
+    Column("reason", _canonical_payload_type(), nullable=False),
+    CheckConstraint("revision > 0", name="ck_pc_source_lifecycle_nodes_revision_positive"),
+    CheckConstraint("sequence >= 0", name="ck_pc_source_lifecycle_nodes_sequence_nonnegative"),
+    CheckConstraint("available IN (0, 1)", name="ck_pc_source_lifecycle_nodes_available_flag"),
+    CheckConstraint(
+        "kind IN ('source', 'memory', 'topic')",
+        name="ck_pc_source_lifecycle_nodes_kind",
+    ),
+)
+
 ARTIFACT_PROCESSING_PENDING_TABLE = Table(
     "pc_artifact_processing_pending",
     SHARED_METADATA,
@@ -1187,5 +1210,10 @@ BUILTIN_TABLES = (
     + MEMORY_TABLES
     + STATISTICS_TABLES
     + RECURRENCE_TABLES
-    + (ARTIFACT_TAGS_TABLE, DREAM_RUNS_TABLE, RECEIPT_MIGRATION_REVIEW_TABLE)
+    + (
+        ARTIFACT_TAGS_TABLE,
+        DREAM_RUNS_TABLE,
+        RECEIPT_MIGRATION_REVIEW_TABLE,
+        SOURCE_LIFECYCLE_NODES_TABLE,
+    )
 )
