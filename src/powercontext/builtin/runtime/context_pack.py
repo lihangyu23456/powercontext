@@ -65,30 +65,28 @@ class ContextPack:
 
         payload = _decode_object(data, "pack")
         if set(payload) != _PACK_FIELDS:
-            raise ContextPackError("pack payload must contain exactly the declared fields")
+            raise ContextPackError("pack payload must contain exactly the declared fields")  # noqa:  TRY003 Avoid specifying long messages outside the exception class
         if payload["schema"] != CONTEXT_PACK_SCHEMA:
-            raise ContextPackError("pack payload schema is not supported")
+            raise ContextPackError("pack payload schema is not supported")  # noqa:  TRY003 Avoid specifying long messages outside the exception class
         items = _decode_items(payload["items"], "pack")
         digest = _decode_digest(payload["digest"], "pack")
         expected = _pack_digest(items)
         if digest != expected:
-            raise ContextPackError("pack digest does not match its content")
+            raise ContextPackError("pack digest does not match its content")  # noqa:  TRY003 Avoid specifying long messages outside the exception class
         byte_count = _decode_byte_count(payload["byte_count"], "pack")
         if byte_count != _self_describing_byte_count(items, digest):
-            raise ContextPackError("pack byte count does not match its serialized size")
+            raise ContextPackError("pack byte count does not match its serialized size")  # noqa:  TRY003 Avoid specifying long messages outside the exception class
         return cls(items=items, digest=digest, byte_count=byte_count)
 
     def to_bytes(self) -> bytes:
         """Serialize the pack into its canonical wire form."""
 
-        return _canonical_json(
-            {
-                "schema": CONTEXT_PACK_SCHEMA,
-                "items": _encode_items(self.items),
-                "digest": self.digest,
-                "byte_count": self.byte_count,
-            }
-        )
+        return _canonical_json({
+            "schema": CONTEXT_PACK_SCHEMA,
+            "items": _encode_items(self.items),
+            "digest": self.digest,
+            "byte_count": self.byte_count,
+        })
 
 
 @dataclass(frozen=True, slots=True)
@@ -122,9 +120,9 @@ class ContextPackDelta:
 
         payload = _decode_object(data, "delta")
         if set(payload) != _DELTA_FIELDS:
-            raise ContextPackError("delta payload must contain exactly the declared fields")
+            raise ContextPackError("delta payload must contain exactly the declared fields")  # noqa:  TRY003 Avoid specifying long messages outside the exception class
         if payload["schema"] != CONTEXT_PACK_DELTA_SCHEMA:
-            raise ContextPackError("delta payload schema is not supported")
+            raise ContextPackError("delta payload schema is not supported")  # noqa:  TRY003 Avoid specifying long messages outside the exception class
         base_digest = _decode_digest(payload["base_digest"], "delta")
         target_digest = _decode_digest(payload["target_digest"], "delta")
         prefix_items = _decode_prefix(payload["prefix_items"])
@@ -139,15 +137,13 @@ class ContextPackDelta:
     def to_bytes(self) -> bytes:
         """Serialize the delta into its canonical wire form."""
 
-        return _canonical_json(
-            {
-                "schema": CONTEXT_PACK_DELTA_SCHEMA,
-                "base_digest": self.base_digest,
-                "target_digest": self.target_digest,
-                "prefix_items": self.prefix_items,
-                "appended": _encode_items(self.appended),
-            }
-        )
+        return _canonical_json({
+            "schema": CONTEXT_PACK_DELTA_SCHEMA,
+            "base_digest": self.base_digest,
+            "target_digest": self.target_digest,
+            "prefix_items": self.prefix_items,
+            "appended": _encode_items(self.appended),
+        })
 
     @property
     def byte_count(self) -> int:
@@ -160,13 +156,13 @@ def apply_context_pack_delta(base: ContextPack, delta: ContextPackDelta) -> Cont
     """Rebuild the target pack from one base pack and one delta."""
 
     if delta.base_digest != base.digest:
-        raise ContextPackError("delta base digest does not match the base pack")
+        raise ContextPackError("delta base digest does not match the base pack")  # noqa:  TRY003 Avoid specifying long messages outside the exception class
     if delta.prefix_items > len(base.items):
-        raise ContextPackError("delta prefix exceeds the base pack")
+        raise ContextPackError("delta prefix exceeds the base pack")  # noqa:  TRY003 Avoid specifying long messages outside the exception class
     items = base.items[: delta.prefix_items] + tuple(delta.appended)
     target = ContextPack.build(items)
     if target.digest != delta.target_digest:
-        raise ContextPackError("delta target digest does not match the rebuilt pack")
+        raise ContextPackError("delta target digest does not match the rebuilt pack")  # noqa:  TRY003 Avoid specifying long messages outside the exception class
     return target
 
 
@@ -208,7 +204,7 @@ def _chunk_content(content: str, chunk_bytes: int) -> tuple[bytes, ...]:
 
 def _chunk_bytes(raw: bytes, chunk_bytes: int) -> tuple[bytes, ...]:
     if chunk_bytes < 1:
-        raise ContextPackError("chunk_bytes must be a positive number of bytes")
+        raise ContextPackError("chunk_bytes must be a positive number of bytes")  # noqa:  TRY003 Avoid specifying long messages outside the exception class
     if not raw:
         return ()
     chunks: list[bytes] = []
@@ -223,7 +219,7 @@ def _chunk_bytes(raw: bytes, chunk_bytes: int) -> tuple[bytes, ...]:
             else:
                 break
         else:
-            raise ContextPackError("chunk size cannot hold a valid UTF-8 boundary")
+            raise ContextPackError("chunk size cannot hold a valid UTF-8 boundary")  # noqa:  TRY003 Avoid specifying long messages outside the exception class
         chunks.append(raw[start:end])
         start = end
     return tuple(chunks)
@@ -237,18 +233,16 @@ def _pack_digest(items: tuple[bytes, ...]) -> str:
 def _self_describing_byte_count(items: tuple[bytes, ...], digest: str) -> int:
     byte_count = 0
     for _ in range(8):
-        payload = _canonical_json(
-            {
-                "schema": CONTEXT_PACK_SCHEMA,
-                "items": _encode_items(items),
-                "digest": digest,
-                "byte_count": byte_count,
-            }
-        )
+        payload = _canonical_json({
+            "schema": CONTEXT_PACK_SCHEMA,
+            "items": _encode_items(items),
+            "digest": digest,
+            "byte_count": byte_count,
+        })
         if len(payload) == byte_count:
             return byte_count
         byte_count = len(payload)
-    raise ContextPackError("pack byte count did not converge")
+    raise ContextPackError("pack byte count did not converge")  # noqa:  TRY003 Avoid specifying long messages outside the exception class
 
 
 def _canonical_json(payload: dict[str, object]) -> bytes:
@@ -261,15 +255,15 @@ def _encode_items(items: tuple[bytes, ...]) -> list[str]:
 
 def _decode_items(value: object, label: str) -> tuple[bytes, ...]:
     if not isinstance(value, list):
-        raise ContextPackError(f"{label} items must be a JSON array")
+        raise ContextPackError(f"{label} items must be a JSON array")  # noqa:  TRY003 Avoid specifying long messages outside the exception class
     items: list[bytes] = []
     for entry in value:
         if not isinstance(entry, str):
-            raise ContextPackError(f"{label} items must be Base64 strings")
+            raise ContextPackError(f"{label} items must be Base64 strings")  # noqa:  TRY003 Avoid specifying long messages outside the exception class
         try:
             items.append(base64.b64decode(entry, validate=True))
         except (ValueError, TypeError) as error:
-            raise ContextPackError(f"{label} items must be valid Base64 strings") from error
+            raise ContextPackError(f"{label} items must be valid Base64 strings") from error  # noqa:  TRY003 Avoid specifying long messages outside the exception class
     return tuple(items)
 
 
@@ -277,27 +271,27 @@ def _decode_object(data: bytes, label: str) -> dict[str, object]:
     try:
         payload = json.loads(data.decode("utf-8"))
     except (UnicodeDecodeError, json.JSONDecodeError) as error:
-        raise ContextPackError(f"{label} payload is not valid UTF-8 JSON") from error
+        raise ContextPackError(f"{label} payload is not valid UTF-8 JSON") from error  # noqa:  TRY003 Avoid specifying long messages outside the exception class
     if not isinstance(payload, dict):
-        raise ContextPackError(f"{label} payload must be a JSON object")
+        raise ContextPackError(f"{label} payload must be a JSON object")  # noqa:  TRY003 Avoid specifying long messages outside the exception class
     return payload
 
 
 def _decode_digest(value: object, label: str) -> str:
     if not isinstance(value, str) or not _DIGEST_PATTERN.match(value):
-        raise ContextPackError(f"{label} digest must be a sha256 value")
+        raise ContextPackError(f"{label} digest must be a sha256 value")  # noqa:  TRY003 Avoid specifying long messages outside the exception class
     return value
 
 
 def _decode_byte_count(value: object, label: str) -> int:
     if type(value) is not int or value < 0:
-        raise ContextPackError(f"{label} byte count must be a non-negative integer")
+        raise ContextPackError(f"{label} byte count must be a non-negative integer")  # noqa:  TRY003 Avoid specifying long messages outside the exception class
     return value
 
 
 def _decode_prefix(value: object) -> int:
     if type(value) is not int or value < 0:
-        raise ContextPackError("delta prefix must be a non-negative integer")
+        raise ContextPackError("delta prefix must be a non-negative integer")  # noqa:  TRY003 Avoid specifying long messages outside the exception class
     return value
 
 

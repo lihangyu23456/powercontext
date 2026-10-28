@@ -72,6 +72,7 @@ class CoalescingEmbeddingModel:
         self._lock = asyncio.Lock()
         self._wake = asyncio.Event()
         self._drain: asyncio.Task[None] | None = None
+        self._batches: set[asyncio.Task[None]] = set()
         self._batch_id = 0
 
     async def embed(self, texts: tuple[str, ...], /) -> EmbeddingResult:
@@ -141,25 +142,24 @@ class CoalescingEmbeddingModel:
     async def _drain_queue(self) -> None:
         """Turn queued texts into bounded provider batches."""
 
-        try:
+        while True:
+            await self._wake.wait()
+            self._wake.clear()
+            if self._coalesce_seconds:
+                # Let the calls that started together join this window.
+                await asyncio.sleep(self._coalesce_seconds)
             while True:
-                await self._wake.wait()
-                self._wake.clear()
-                if self._coalesce_seconds:
-                    # Let the calls that started together join this window.
-                    await asyncio.sleep(self._coalesce_seconds)
-                while True:
-                    async with self._lock:
-                        if not self._queue:
-                            self._drain = None
-                            return
-                        batch = tuple(self._queue[: self._max_batch_size])
-                        del self._queue[: len(batch)]
-                        self._batch_id += 1
-                        batch_id = self._batch_id
-                    asyncio.create_task(self._run_batch(batch, batch_id))
-        except asyncio.CancelledError:
-            raise
+                async with self._lock:
+                    if not self._queue:
+                        self._drain = None
+                        return
+                    batch = tuple(self._queue[: self._max_batch_size])
+                    del self._queue[: len(batch)]
+                    self._batch_id += 1
+                    batch_id = self._batch_id
+                task = asyncio.create_task(self._run_batch(batch, batch_id))
+                self._batches.add(task)
+                task.add_done_callback(self._batches.discard)
 
     async def _run_batch(self, texts: tuple[str, ...], batch_id: int) -> None:
         try:

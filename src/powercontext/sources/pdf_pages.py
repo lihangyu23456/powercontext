@@ -24,7 +24,12 @@ from typing import TYPE_CHECKING, Final, Protocol
 from pydantic import BaseModel
 
 from powercontext.artifacts import MemoryCitation
-from powercontext.builtin.runtime.models import GetMemoryEntryRequest, MemoryEntryRecord, MemorySearchPage, SearchMemoryRequest
+from powercontext.builtin.runtime.models import (
+    GetMemoryEntryRequest,
+    MemoryEntryRecord,
+    MemorySearchPage,
+    SearchMemoryRequest,
+)
 from powercontext.limits import MAX_SOURCE_ID_LENGTH
 from powercontext.sources import TEXT_EVIDENCE_PROJECTION_KEY, AdapterSourceDefinition, TextEvidence
 from powercontext.sources.definitions import SourceDefinition
@@ -99,14 +104,14 @@ def parse_pdf_document(value: PDFDocumentInput) -> tuple[PDFPageInput, ...]:
     try:
         total = len(reader.pages)
     except Exception as error:
-        raise ValueError("PDF pages could not be read") from error
+        raise ValueError("PDF pages could not be read") from error  # noqa: TRY003
 
     pages: list[PDFPageInput] = []
     for index in range(total):
         try:
             text = reader.pages[index].extract_text() or ""
         except Exception as error:
-            raise ValueError(f"PDF page {index + 1} could not be parsed") from error
+            raise ValueError(f"PDF page {index + 1} could not be parsed") from error  # noqa: TRY003
         pages.append(
             PDFPageInput(
                 document_id=document_id,
@@ -131,9 +136,7 @@ async def search_pdf_pages(
 
     if limit < 1:
         return ()
-    page = await memory.search(
-        SearchMemoryRequest(query=question, mode="fts", limit=max(limit * 4, 40))
-    )
+    page = await memory.search(SearchMemoryRequest(query=question, mode="fts", limit=max(limit * 4, 40)))
     citations: list[MemoryCitation] = []
     seen: set[str] = set()
     for hit in page.hits:
@@ -215,12 +218,12 @@ def _open_reader(content: bytes) -> PdfReader:
     try:
         reader = PdfReader(io.BytesIO(content))
     except Exception as error:
-        raise ValueError("PDF content could not be parsed") from error
+        raise ValueError("PDF content could not be parsed") from error  # noqa: TRY003
     if reader.is_encrypted:
         try:
             decrypted = reader.decrypt("")
         except Exception as error:
-            raise ValueError("PDF content could not be decrypted") from error
+            raise ValueError("PDF content could not be decrypted") from error  # noqa: TRY003
         if not decrypted:
             raise ValueError("PDF content requires a password")  # noqa: TRY003
     return reader

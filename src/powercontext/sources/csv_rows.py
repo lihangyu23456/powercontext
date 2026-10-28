@@ -163,7 +163,7 @@ def _decode_csv(content: bytes) -> str:
     try:
         return content.decode("utf-8")
     except UnicodeDecodeError as error:
-        raise ValueError("CSV content must be valid UTF-8") from error
+        raise ValueError("CSV content must be valid UTF-8") from error  # noqa: TRY003
 
 
 def _read_records(text: str) -> list[list[str]]:
@@ -171,7 +171,7 @@ def _read_records(text: str) -> list[list[str]]:
     try:
         return list(reader)
     except csv.Error as error:
-        raise ValueError(f"CSV content is malformed: {error}") from error
+        raise ValueError(f"CSV content is malformed: {error}") from error  # noqa: TRY003
 
 
 def _parse_records(text: str) -> tuple[tuple[str, ...], list[list[str]]]:
@@ -194,7 +194,7 @@ def _primary_key_index(columns: tuple[str, ...], primary_key: str) -> int:
     try:
         return columns.index(primary_key)
     except ValueError:
-        raise ValueError(f"primary_key {primary_key!r} must match a CSV header field") from None
+        raise ValueError(f"primary_key {primary_key!r} must match a CSV header field") from None  # noqa: TRY003
 
 
 def _parse_rows(

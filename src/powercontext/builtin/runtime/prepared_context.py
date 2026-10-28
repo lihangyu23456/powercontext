@@ -218,7 +218,7 @@ class PreparedContextBuilder:
             topic_memory_hits=topic_memory_hits,
         )
 
-    def build_scopes_result(
+    def build_scopes_result(  # noqa: C901
         self,
         *,
         request: PrepareContextRequest,
@@ -469,7 +469,7 @@ class PreparedContextBuilder:
         content = render_context_text(included, assembly)
         return content, tuple(origins), omissions
 
-    def _select_evidence(
+    def _select_evidence(  # noqa: C901
         self,
         request: PrepareContextRequest,
         *,
@@ -505,18 +505,16 @@ class PreparedContextBuilder:
                     entry_version_id=hit.entry_version_id,
                 )
                 for span_order, (start, end, score) in enumerate(_evidence_spans(hit.text, terms)):
-                    ranked.append(
-                        (
-                            score,
-                            order * 1000 + span_order,
-                            PreparedContextFragment(
-                                address=address,
-                                start=start,
-                                end=end,
-                                text=hit.text[start:end],
-                            ),
-                        )
-                    )
+                    ranked.append((
+                        score,
+                        order * 1000 + span_order,
+                        PreparedContextFragment(
+                            address=address,
+                            start=start,
+                            end=end,
+                            text=hit.text[start:end],
+                        ),
+                    ))
         if not ranked:
             return None, (), (), PreparedContextOmissions()
         ranked.sort(key=lambda item: (-item[0], item[1]))

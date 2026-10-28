@@ -214,7 +214,7 @@ class PiSessionConnector:
         )
 
 
-def _parse_archive(content: bytes) -> _PiArchive:
+def _parse_archive(content: bytes) -> _PiArchive:  # noqa: C901
     text = _decode(content)
     records: list[dict[str, Any]] = []
     for number, line in enumerate(text.splitlines(), start=1):
@@ -223,9 +223,9 @@ def _parse_archive(content: bytes) -> _PiArchive:
         try:
             record = json.loads(line)
         except json.JSONDecodeError as error:
-            raise ValueError(f"Pi session line {number} is not valid JSON") from error
+            raise ValueError(f"Pi session line {number} is not valid JSON") from error  # noqa: TRY003
         if not isinstance(record, dict):
-            raise ValueError(f"Pi session line {number} must be a JSON object")  # noqa: TRY003
+            raise ValueError(f"Pi session line {number} must be a JSON object")  # noqa: TRY003, TRY004
         records.append(record)
 
     if not records:
@@ -356,7 +356,7 @@ def _bash_execution_body(message: dict[str, Any]) -> str | None:
     return f"$ {command}\n{output if isinstance(output, str) else ''}"
 
 
-def _visible_text(content: object) -> str | None:
+def _visible_text(content: object) -> str | None:  # noqa: C901
     if isinstance(content, str):
         return content or None
     if not isinstance(content, list):
@@ -405,17 +405,17 @@ def _decode(content: bytes) -> str:
     try:
         return content.decode("utf-8")
     except UnicodeDecodeError as error:
-        raise ValueError("Pi session content must be valid UTF-8") from error
+        raise ValueError("Pi session content must be valid UTF-8") from error  # noqa: TRY003
 
 
 def _captured_events(checkpoint: object) -> tuple[str | None, dict[str, dict[str, str]]]:
     if checkpoint is None:
         return None, {}
     if not isinstance(checkpoint, dict):
-        raise ValueError("Pi session checkpoint must be a JSON object")  # noqa: TRY003
+        raise ValueError("Pi session checkpoint must be a JSON object")  # noqa: TRY003, TRY004
     events = checkpoint.get("events", {})
     if not isinstance(events, dict):
-        raise ValueError("Pi session checkpoint events must be a JSON object")  # noqa: TRY003
+        raise ValueError("Pi session checkpoint events must be a JSON object")  # noqa: TRY003, TRY004
     session_id = checkpoint.get("session_id")
     return (session_id if isinstance(session_id, str) else None), events
 

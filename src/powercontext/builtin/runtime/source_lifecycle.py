@@ -79,9 +79,7 @@ class ScopedSourceLifecycleService:
         if revision < 1:
             raise SourceLifecycleError("revision must be positive")  # noqa: TRY003
         reference = SourceRef.model_validate(source_ref)
-        await self._runtime.records.for_scope(self.scope_id).get_source(
-            reference.source_type, reference.source_id
-        )
+        await self._runtime.records.for_scope(self.scope_id).get_source(reference.source_type, reference.source_id)
         await self._register(
             StoredSourceLifecycleNode(
                 node_id=node_id,
@@ -109,9 +107,7 @@ class ScopedSourceLifecycleService:
 
         _require_node_id(node_id)
         reference = MemoryCitation.model_validate(citation)
-        await self._runtime.memory.for_scope(self.scope_id).get(
-            GetMemoryEntryRequest(citation=reference)
-        )
+        await self._runtime.memory.for_scope(self.scope_id).get(GetMemoryEntryRequest(citation=reference))
         await self._register(
             StoredSourceLifecycleNode(
                 node_id=node_id,

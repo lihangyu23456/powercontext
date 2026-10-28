@@ -106,9 +106,7 @@ class HTTPMemoryReranker:
         for batch in _batches(candidates, self._batch_size):
             payload = _HTTPBatchRequest(
                 query=query,
-                candidates=tuple(
-                    _HTTPBatchCandidate(rank=rank, text=candidate.text) for rank, candidate in batch
-                ),
+                candidates=tuple(_HTTPBatchCandidate(rank=rank, text=candidate.text) for rank, candidate in batch),
             )
             response = await self._client.post(self._endpoint, json=payload.model_dump(mode="json"))
             response.raise_for_status()
@@ -144,11 +142,11 @@ def _validated_scores(response: httpx.Response, expected_ranks: set[int]) -> dic
     try:
         payload = response.json()
     except ValueError as error:
-        raise ValueError("rerank service returned a body that is not JSON") from error
+        raise ValueError("rerank service returned a body that is not JSON") from error  # noqa:  TRY003 Avoid specifying long messages outside the exception class
     try:
         parsed = _HTTPBatchResponse.model_validate(payload)
     except ValidationError as error:
-        raise ValueError("rerank service returned an invalid response body") from error
+        raise ValueError("rerank service returned an invalid response body") from error  # noqa:  TRY003 Avoid specifying long messages outside the exception class
 
     scores: dict[int, float] = {}
     for item in parsed.scores:
