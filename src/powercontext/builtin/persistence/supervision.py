@@ -253,10 +253,16 @@ class ArtifactProcessingLeaseRepository:
         connection: AsyncConnection,
         fence: ArtifactProcessingFence,
         /,
+        *,
+        for_update: bool = True,
     ) -> StoredArtifactProcessingLease:
-        """Lock and validate the authoritative term inside a publication transaction."""
+        """Lock and validate the authoritative term inside a publication transaction.
 
-        current = await self.load(connection, fence.supervisor_group, for_update=True)
+        A read-only pass validates the same term without taking the write lock,
+        so an observation never blocks another writer.
+        """
+
+        current = await self.load(connection, fence.supervisor_group, for_update=for_update)
         if (
             current is None
             or current.holder_id != fence.holder_id

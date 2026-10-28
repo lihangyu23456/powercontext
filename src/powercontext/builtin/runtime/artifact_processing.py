@@ -692,7 +692,7 @@ class ArtifactProcessingSupervisor:
         if state.requested_after == 0:
             state.notification_at_start = self._notifications
         async with self._database.transaction() as connection:
-            await self._leases.require_fence(connection, self._require_current_fence())
+            await self._leases.require_fence(connection, self._require_current_fence(), for_update=False)
             if state.requested_after == 0:
                 table = ARTIFACT_PROCESSING_INTENTS_TABLE
                 state.unacknowledged = int(
@@ -729,6 +729,18 @@ class ArtifactProcessingSupervisor:
         capacity = self._fresh_capacity(state)
         if capacity <= 0:
             return
+        enabled = binding.automatic_processing_interval is not None or binding.cron is not None
+        if not enabled:
+            # A Family without a schedule publishes only to finish a scan left
+            # in progress. Observing that state must not take the write lock, so
+            # the check runs before the publication transaction.
+            async with self._database.transaction() as connection:
+                persisted = await self._binding_states.load(connection, binding.binding_name)
+            if persisted is None or not persisted.scan_in_progress:
+                state.next_schedule_at = None
+                state.scan_after = 0
+                state.scan_in_progress = False
+                return
         # Publish RAM progress only after the transaction commits. Advancing a
         # page cursor before admit/finish/commit succeeds would skip rolled-back
         # rows on the next discovery pass of this same persisted generation.
@@ -741,7 +753,6 @@ class ArtifactProcessingSupervisor:
         async with self._database.transaction() as connection:
             await self._leases.require_fence(connection, self._require_current_fence())
             persisted = await self._binding_states.load(connection, binding.binding_name, for_update=True)
-            enabled = binding.automatic_processing_interval is not None or binding.cron is not None
             if not enabled:
                 if persisted is not None and persisted.scan_in_progress:
                     await self._binding_states.finish_scan(connection, binding.binding_name)

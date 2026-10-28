@@ -495,6 +495,7 @@ class ScopedSourceApplication:
                             span.set_attributes({_MEMORY_CAPTURE_SOURCE_COUNT: 1})
             except BaseValueConflictError as error:
                 raise SourceConflictError("identity", error.identity) from None
+            self._runtime._wake_source_processing()
             return SourceReceipt(
                 source_ref=SourceRef(source_type=record.source_type, source_id=record.source_id),
                 sequence=record.position,
@@ -511,7 +512,8 @@ class ScopedSourceApplication:
                 )
                 if span is not None:
                     span.set_attributes({_MEMORY_CAPTURE_SOURCE_COUNT: 1})
-            return SourceReceipt(source_ref=context.sources.catalog.as_ref(source), sequence=sequence)
+        self._runtime._wake_source_processing()
+        return SourceReceipt(source_ref=context.sources.catalog.as_ref(source), sequence=sequence)
 
 
 class SourceApplication:
@@ -3295,6 +3297,26 @@ class BuiltinRuntime:
             self._dream_service.authorize = dream
             self._dream_service.authorization_context = context
             self._dream_service.attest_candidate = attest_candidate
+
+    def _wake_source_processing(self) -> None:
+        """Let the Supervisor notice newly published Source input.
+
+        A captured Source can satisfy a count condition, so the Supervisor is
+        notified instead of waiting for its next discovery pass.
+        """
+
+        if self.artifact_processing_supervisor is None:
+            return
+        try:
+            self.artifact_processing_supervisor.wake()
+        except Exception as error:
+            log_safely(
+                logger,
+                logging.WARNING,
+                "Artifact processing supervisor wake failed after source capture",
+                exc_info=error,
+                extra={"event": "source_capture.wake_failed", "outcome": "captured"},
+            )
 
     async def close(self) -> None:
         """Stop accepting work and await in-flight operations without closing the provider."""

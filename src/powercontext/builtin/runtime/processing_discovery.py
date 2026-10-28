@@ -70,6 +70,13 @@ class SourceProcessingPendingProvider:
         fence: ArtifactProcessingFence,
         lock_intents: bool = True,
     ) -> PendingReconcile:
+        """Inspect one bounded page of domain progress.
+
+        The startup pass publishes intents and therefore locks them. The
+        count-triggered poll only observes progress, so it reads without
+        taking the write lock and never blocks another writer.
+        """
+
         heads = SOURCE_JOURNAL_HEADS_TABLE
         statement = select(heads.c.scope_id, heads.c.position).order_by(heads.c.scope_id).limit(limit)
         if after_scope_id is not None:
@@ -78,7 +85,7 @@ class SourceProcessingPendingProvider:
             statement = statement.join(PROFILE_POLICIES_TABLE, PROFILE_POLICIES_TABLE.c.scope_id == heads.c.scope_id)
             statement = statement.where(PROFILE_POLICIES_TABLE.c.generation_enabled.is_(True))
         async with self._database.transaction() as connection:
-            await ArtifactProcessingLeaseRepository().require_fence(connection, fence)
+            await ArtifactProcessingLeaseRepository().require_fence(connection, fence, for_update=lock_intents)
             rows = (await connection.execute(statement)).all()
             intents = ArtifactProcessingIntentRepository()
             cursors = SourceCursorRepository()
@@ -92,10 +99,10 @@ class SourceProcessingPendingProvider:
                 if self._count_threshold is not None and int(high) - consumed >= self._count_threshold:
                     # The count condition accepts its own invocation, so a busy Scope
                     # starts processing without waiting for the time condition.
-                    if intent is None or intent.requested_generation <= intent.handled_generation:
+                    if lock_intents and (intent is None or intent.requested_generation <= intent.handled_generation):
                         await intents.request(connection, scope, self._binding)
-                        requested = True
-                if intent is None or intent.dirty_generation == intent.clean_generation:
+                    requested = True
+                if lock_intents and (intent is None or intent.dirty_generation == intent.clean_generation):
                     await intents.mark_dirty(connection, scope, self._binding)
         return PendingReconcile(
             next_scope_id=str(rows[-1][0]) if len(rows) == limit else None,

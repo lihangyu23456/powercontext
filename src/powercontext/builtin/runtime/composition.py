@@ -803,6 +803,17 @@ def _artifact_processing_bindings(  # noqa: C901 - validate and assemble one reg
     return tuple(configured)
 
 
+def _source_count_thresholds(config: BuiltinConfig) -> dict[str, int]:
+    """Map every configured count condition onto its processing binding."""
+
+    thresholds = {
+        "memory": config.runtime.memory_source_count_threshold,
+        "topic-memory": config.runtime.topic_memory_source_count_threshold,
+    }
+    canonical = {**FAMILY_BINDINGS, "topic-memory": TOPIC_MEMORY_SOURCE_WINDOW_BINDING}
+    return {canonical[family]: threshold for family, threshold in thresholds.items() if threshold is not None}
+
+
 def _validate_processing_registrations(configured: Sequence[ArtifactProcessingBinding]) -> None:
     for attribute in ("binding_name", "artifact_family", "config_prefix"):
         identifiers = [getattr(binding, attribute) for binding in configured]
@@ -958,6 +969,7 @@ async def open_builtin_contexts(
                 model_usage_write_timeout_seconds=config.runtime.model_usage_write_timeout_seconds,
                 model_usage_flush_timeout_seconds=config.runtime.model_usage_flush_timeout_seconds,
                 source_registry=source_registry,
+                source_count_thresholds=_source_count_thresholds(config),
                 cursor_secret=cursor_secret,
                 tracing=tracing,
             )
@@ -1035,6 +1047,7 @@ async def open_builtin_contexts(
             model_usage_write_timeout_seconds=config.runtime.model_usage_write_timeout_seconds,
             model_usage_flush_timeout_seconds=config.runtime.model_usage_flush_timeout_seconds,
             source_registry=source_registry,
+            source_count_thresholds=_source_count_thresholds(config),
             cursor_secret=cursor_secret,
             tracing=tracing,
         )
