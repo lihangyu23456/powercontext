@@ -175,23 +175,23 @@ class ScopedSourceLifecycleService:
                     if node.available != event.available:
                         raise SourceLifecycleError("event sequence was reused")  # noqa: TRY003
                     return _available(nodes)
-                nodes[event.node_id] = node.model_copy(
+                updated = dict(nodes)
+                updated[event.node_id] = node.model_copy(
                     update={
                         "available": event.available,
                         "sequence": event.sequence,
                         "reason": event.reason,
                     }
                 )
-                before = {node_id: item.available for node_id, item in nodes.items()}
-                _propagate(nodes)
-                changed = {
-                    node_id: item
-                    for node_id, item in nodes.items()
-                    if node_id not in before or before[node_id] != item.available
-                }
-                await repository.save(connection, self.scope_id, tuple(nodes.values()))
+                _propagate(updated)
+                changed = _changed_nodes(nodes, updated)
+            # The native state is written before the lifecycle state, so a failed
+            # native write leaves the event unapplied and the same event can be
+            # retried to completion.
             await self._apply_native(changed)
-            return _available(nodes)
+            async with self._runtime.database.transaction() as connection:
+                await SourceLifecycleRepository().save(connection, self.scope_id, tuple(updated.values()))
+            return _available(updated)
 
     async def resolve(
         self,
@@ -229,16 +229,16 @@ class ScopedSourceLifecycleService:
                         raise SourceLifecycleError("node id is already bound to other evidence")  # noqa: TRY003
                     return
                 _validate_parents(nodes, node)
-                nodes[node.node_id] = node
-                before = {node_id: item.available for node_id, item in nodes.items()}
-                _propagate(nodes)
-                changed = {
-                    node_id: item
-                    for node_id, item in nodes.items()
-                    if node_id not in before or before[node_id] != item.available
-                }
-                await repository.save(connection, self.scope_id, tuple(nodes.values()))
+                updated = dict(nodes)
+                updated[node.node_id] = node
+                _propagate(updated)
+                changed = _changed_nodes(nodes, updated)
+            # The native state is written before the lifecycle state, so a failed
+            # native write leaves the registration unapplied and the same
+            # registration can be retried to completion.
             await self._apply_native(changed)
+            async with self._runtime.database.transaction() as connection:
+                await SourceLifecycleRepository().save(connection, self.scope_id, tuple(updated.values()))
 
     async def _apply_native(self, changed: dict[str, StoredSourceLifecycleNode]) -> None:
         """Deactivate or restore the Memory entries whose support changed."""
@@ -252,6 +252,17 @@ class ScopedSourceLifecycleService:
                 citation = MemoryCitation.model_validate(node.reference)
                 record = await application.get(GetMemoryEntryRequest(citation=citation))
                 head = await service.head(record.memory_ref.artifact_id)
+                # The citation keeps the Memory Revision it was registered against,
+                # so the current state is read from the current head.
+                current = next(
+                    (entry for entry in head.content.manifest.entries if entry.entry_id == record.entry.entry_id),
+                    None,
+                )
+                state = None if current is None else current.state
+                if node.available and state == "active":
+                    continue
+                if not node.available and state == "inactive":
+                    continue
                 if node.available:
                     await service.reactivate(head, entries=(record.entry,))
                 else:
@@ -272,6 +283,19 @@ class SourceLifecycleApplication:
 
 def _available(nodes: dict[str, StoredSourceLifecycleNode]) -> list[str]:
     return sorted(node_id for node_id, node in nodes.items() if node.available)
+
+
+def _changed_nodes(
+    before: dict[str, StoredSourceLifecycleNode],
+    after: dict[str, StoredSourceLifecycleNode],
+) -> dict[str, StoredSourceLifecycleNode]:
+    """Return the nodes whose availability differs between two graph states."""
+
+    return {
+        node_id: node
+        for node_id, node in after.items()
+        if node_id not in before or before[node_id].available != node.available
+    }
 
 
 def _propagate(nodes: dict[str, StoredSourceLifecycleNode]) -> None:
