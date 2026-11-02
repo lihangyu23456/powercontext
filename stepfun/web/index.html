@@ -1,0 +1,46 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>端侧知识库 · 本地向量化 + seekdb 混合检索</title>
+<link rel="stylesheet" href="./style.css" />
+</head>
+<body>
+<header>
+  <h1>端侧知识库</h1>
+  <p class="sub">文档在<strong>浏览器本地</strong>向量化，向量与原文写入 <strong>seekdb</strong>，检索由 seekdb 的<strong>混合检索</strong>完成（全文关键词 + 向量语义）。</p>
+  <div class="backend">
+    <span id="backend-badge" class="badge badge-wait">正在检测推理后端…</span>
+    <span id="model-badge" class="badge">模型加载中…</span>
+  </div>
+</header>
+
+<section class="panel">
+  <h2>1. 导入文档</h2>
+  <p class="hint">每行一段文本。向量化在本机完成，浏览器不会把原文发给任何云端推理服务。</p>
+  <textarea id="docs" rows="7" spellcheck="false">seekdb 把向量检索、全文检索和结构化条件放进同一个 SQL 引擎
+混合检索可以一条语句同时用上关键词匹配和向量相似度
+PowerContext 负责把值得记住的结论沉淀成记忆
+HNSW 索引用近似最近邻换来更低的查询延迟
+BM25 排序对关键词检索依然有效</textarea>
+  <div class="row">
+    <button id="btn-embed" class="primary">本地向量化并写入 seekdb</button>
+    <span id="embed-status" class="status"></span>
+  </div>
+</section>
+
+<section class="panel">
+  <h2>2. 混合检索</h2>
+  <div class="row">
+    <input id="query" type="text" value="怎么让混合检索更快" placeholder="输入检索词" />
+    <button id="btn-search" class="primary">检索</button>
+    <label class="inline"><input type="checkbox" id="use-keyword" checked /> 叠加关键词条件</label>
+  </div>
+  <div id="timing" class="timing"></div>
+  <ol id="results" class="results"></ol>
+</section>
+
+<script type="module" src="./app.js"></script>
+</body>
+</html>

@@ -1,0 +1,16 @@
+{
+  "name": "kb-measure",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Measures the model size, the quantization effect and the local embedding cost.",
+  "scripts": {
+    "measure": "node measure.mjs"
+  },
+  "engines": {
+    "node": ">=20"
+  },
+  "dependencies": {
+    "@huggingface/transformers": "^3.0.2"
+  }
+}

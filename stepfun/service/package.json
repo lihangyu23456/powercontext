@@ -1,0 +1,17 @@
+{
+  "name": "kb-service",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Local service that stores browser computed vectors in seekdb and runs the hybrid search there.",
+  "main": "server.mjs",
+  "scripts": {
+    "start": "node server.mjs"
+  },
+  "engines": {
+    "node": ">=20"
+  },
+  "dependencies": {
+    "seekdb": "^1.2.0"
+  }
+}

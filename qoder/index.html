@@ -1,0 +1,328 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>用 Qoder 从零搭一个 AI 记忆助手 · seekdb × PowerContext 实战教程</title>
+<style>
+  :root {
+    --ink: #16202c;
+    --muted: #5a6b7c;
+    --line: #e3e9ef;
+    --bg: #f7f9fb;
+    --card: #ffffff;
+    --accent: #0b6bcb;
+    --accent-soft: #eaf2fc;
+    --code-bg: #0f1b26;
+    --code-ink: #dfe8f2;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    color: var(--ink);
+    background: var(--bg);
+    font: 16px/1.75 -apple-system, "Segoe UI", "PingFang SC", "Microsoft YaHei", sans-serif;
+  }
+  .wrap { max-width: 960px; margin: 0 auto; padding: 0 24px 96px; }
+  header.hero {
+    background: linear-gradient(135deg, #0b3f74, #0b6bcb 60%, #3f9dff);
+    color: #fff;
+    padding: 64px 0 56px;
+  }
+  header.hero .wrap { padding-bottom: 0; }
+  .eyebrow { letter-spacing: .16em; text-transform: uppercase; font-size: 12px; opacity: .82; }
+  h1 { font-size: 34px; line-height: 1.3; margin: 12px 0 10px; }
+  header.hero p { margin: 0; font-size: 17px; opacity: .92; max-width: 720px; }
+  .meta { margin-top: 22px; font-size: 14px; opacity: .85; }
+  h2 { font-size: 24px; margin: 52px 0 14px; padding-bottom: 10px; border-bottom: 2px solid var(--line); }
+  h3 { font-size: 18px; margin: 30px 0 10px; }
+  p, li { color: #23313f; }
+  .lead { font-size: 17px; color: var(--muted); }
+  code {
+    font-family: "SFMono-Regular", Consolas, "Liberation Mono", monospace;
+    font-size: .92em;
+    background: var(--accent-soft);
+    color: #0a4f9c;
+    padding: 1px 5px;
+    border-radius: 4px;
+  }
+  pre {
+    background: var(--code-bg);
+    color: var(--code-ink);
+    padding: 16px 18px;
+    border-radius: 10px;
+    overflow-x: auto;
+    font-size: 13.5px;
+    line-height: 1.6;
+  }
+  pre code { background: none; color: inherit; padding: 0; font-size: inherit; }
+  table { width: 100%; border-collapse: collapse; margin: 18px 0; background: var(--card); border-radius: 8px; overflow: hidden; }
+  th, td { text-align: left; padding: 11px 14px; border-bottom: 1px solid var(--line); vertical-align: top; }
+  th { background: #eef3f8; font-size: 14px; }
+  tr:last-child td { border-bottom: 0; }
+  .card { background: var(--card); border: 1px solid var(--line); border-radius: 12px; padding: 20px 22px; margin: 18px 0; }
+  .callout { border-left: 4px solid var(--accent); background: var(--accent-soft); padding: 14px 18px; border-radius: 8px; margin: 18px 0; }
+  .callout strong { color: #0a4f9c; }
+  .steps { counter-reset: step; list-style: none; padding: 0; }
+  .steps > li { position: relative; padding-left: 42px; margin-bottom: 14px; }
+  .steps > li::before {
+    counter-increment: step; content: counter(step);
+    position: absolute; left: 0; top: 2px;
+    width: 26px; height: 26px; border-radius: 50%;
+    background: var(--accent); color: #fff;
+    font-size: 13px; font-weight: 600;
+    display: flex; align-items: center; justify-content: center;
+  }
+  .toc { background: var(--card); border: 1px solid var(--line); border-radius: 12px; padding: 18px 22px; }
+  .toc ol { margin: 8px 0 0; padding-left: 20px; }
+  .toc a { color: var(--accent); text-decoration: none; }
+  .toc a:hover { text-decoration: underline; }
+  footer { margin-top: 64px; padding-top: 22px; border-top: 1px solid var(--line); color: var(--muted); font-size: 14px; }
+</style>
+</head>
+<body>
+<header class="hero">
+  <div class="wrap">
+    <div class="eyebrow">Qoder 实战教程</div>
+    <h1>用 Qoder 从零搭一个 AI 记忆助手</h1>
+    <p>把 seekdb 当数据底座、PowerContext 当记忆层，用 Qoder 把它俩连成一个真能用的应用：
+       文档进来能被记住，问题进来能被召回。</p>
+    <div class="meta">技术栈：Qoder + seekdb 1.4 + PowerContext ｜ 阅读时间约 25 分钟 ｜ 面向后端与 AI 应用工程师</div>
+  </div>
+</header>
+
+<div class="wrap">
+
+<div class="toc">
+  <strong>目录</strong>
+  <ol>
+    <li><a href="#s1">先看清要造什么：记忆助手的四步闭环</a></li>
+    <li><a href="#s2">seekdb 概念与上手：向量、全文与混合检索</a></li>
+    <li><a href="#s3">PowerContext 概念与上手：Scope、Source、Memory</a></li>
+    <li><a href="#s4">动手：把两者接起来（数据面 + 记忆面）</a></li>
+    <li><a href="#s5">用 Qoder 把它变成产品：提示词、Agent 与评测</a></li>
+    <li><a href="#s6">踩坑清单与收尾</a></li>
+  </ol>
+</div>
+
+<h2 id="s1">1. 先看清要造什么：记忆助手的四步闭环</h2>
+<p class="lead">我们要造的不是「向量库 Demo」，而是一个闭环系统。把它拆成四步，后面每一步都对应一个具体能力：</p>
+<table>
+  <thead><tr><th>步骤</th><th>发生什么</th><th>由谁承担</th></tr></thead>
+  <tbody>
+    <tr><td>① 采集</td><td>原始文档/对话变成结构化 Source</td><td>PowerContext Source</td></tr>
+    <tr><td>② 派生</td><td>Source 被处理成可检索的 Memory 条目</td><td>PowerContext 后台处理</td></tr>
+    <tr><td>③ 检索</td><td>按查询同时走向量与全文</td><td>seekdb 混合检索</td></tr>
+    <tr><td>④ 沉淀</td><td>本次结论写回，形成下一轮的输入</td><td>PowerContext 记忆</td></tr>
+  </tbody>
+</table>
+<div class="callout">
+  <strong>分工要清楚：</strong>seekdb 负责「把相关的东西找出来」，PowerContext 负责「把值得记住的东西记下来」。
+  这两条线各自都能单独跑，但只有接起来，第 ④ 步才会产生复利。
+</div>
+
+<h2 id="s2">2. seekdb 概念与上手：向量、全文与混合检索</h2>
+
+<h3>2.1 它是什么</h3>
+<p>seekdb 是兼容 MySQL 协议的新一代数据库，把<strong>向量检索</strong>、<strong>全文检索</strong>和<strong>结构化条件</strong>放进同一个 SQL 执行引擎里。
+对你的价值是：不需要「业务库 + 向量库」两套系统，也不需要在应用层把两路结果手工拼起来。</p>
+
+<h3>2.2 起一个实例</h3>
+<pre><code># 最省事：官方包
+docker run --name seekdb -p 2881:2881 -d oceanbase/seekdb:1.4.0
+
+# 或者本地 server 模式（Windows / Linux 都可）
+./seekdb --nodaemon --parameter memory_budget=4G --parameter cpu_count=4</code></pre>
+<p>起来后用任意 MySQL 客户端连 <code>127.0.0.1:2881</code>，用户 <code>root</code>，空密码。</p>
+
+<h3>2.3 建表、灌数据、混合检索</h3>
+<pre><code>CREATE DATABASE kb;
+USE kb;
+
+CREATE TABLE docs (
+  id        BIGINT PRIMARY KEY AUTO_INCREMENT,
+  title     VARCHAR(256) NOT NULL,
+  body      TEXT NOT NULL,
+  embedding VECTOR(4)
+);
+
+INSERT INTO docs(title, body, embedding) VALUES
+  ('连接池配置', 'max_connections 建议按峰值 QPS 的 1.5 倍设置', '[0.1,0.2,0.3,0.4]'),
+  ('慢查询',   '没有走索引的排序会退化成全表排序',           '[0.9,0.1,0.2,0.3]');
+
+-- 全文检索：关键词
+SELECT id, title FROM docs WHERE MATCH(title, body) AGAINST('索引');
+
+-- 向量检索：语义相近
+SELECT id, title FROM docs
+  ORDER BY l2_distance(embedding, '[0.9,0.1,0.2,0.3]') APPROXIMATE
+  LIMIT 5;
+
+-- 混合：结构化条件 + 向量 + 全文，一起交给 seekdb
+SELECT id, title
+  FROM docs
+  WHERE MATCH(title, body) AGAINST('索引')
+  ORDER BY l2_distance(embedding, '[0.9,0.1,0.2,0.3]') APPROXIMATE
+  LIMIT 5;</code></pre>
+
+<div class="callout">
+  <strong>注意 APPROXIMATE：</strong>它是近似的 HNSW 检索，召回率与延迟之间有取舍。
+  需要严格一致时用精确检索（去掉 <code>APPROXIMATE</code>），并用真实 Recall 指标验证质量没有退化。
+</div>
+
+<h3>2.4 全文索引：建索引前先知道自己在建什么</h3>
+<pre><code>-- 中文用 ik 分词器，英文用 beng
+ALTER TABLE docs ADD FULLTEXT INDEX ft_title (title) WITH PARSER ik;
+
+SHOW CREATE TABLE docs\G   -- 看索引建好没、字段对不对</code></pre>
+
+<h2 id="s3">3. PowerContext 概念与上手：Scope、Source、Memory</h2>
+
+<h3>3.1 它是什么</h3>
+<p>PowerContext 是 AI 应用的记忆与上下文层。它把「数据」和「记忆」分开：
+   <strong>Source</strong> 是原始输入（文档、对话、日志），<strong>Memory</strong> 是从 Source 里提炼出来、可被检索复用的结论。
+   后台处理负责把 Source 变成 Memory，你不需要自己写提炼流水线。</p>
+
+<h3>3.2 核心概念</h3>
+<table>
+  <thead><tr><th>概念</th><th>是什么</th><th>你会怎么用</th></tr></thead>
+  <tbody>
+    <tr><td>Scope</td><td>一个隔离的上下文空间</td><td>按系统 / 按服务 / 按用户分 scope，记忆不会串</td></tr>
+    <tr><td>Source</td><td>原始内容，带类型与元数据</td><td>入库的文档、一次会话、一条告警</td></tr>
+    <tr><td>Memory</td><td>从 Source 提炼的可检索条目</td><td>召回后直接进提示词</td></tr>
+    <tr><td>Artifact</td><td>记忆的物化载体（memory / topic-memory / handoff …）</td><td>通常不需要直接碰</td></tr>
+    <tr><td>处理</td><td>Source → Memory 的后台任务</td><td>配置触发方式：按条数触发或按时间触发</td></tr>
+  </tbody>
+</table>
+
+<h3>3.3 三种接入方式</h3>
+<pre><code># 1) HTTP API
+POST /v1/scopes/{scope_id}/sources
+POST /v1/scopes/{scope_id}/memories/search
+
+# 2) MCP（推荐给 Agent 用，工具语义更直接）
+#    capture_content_source / search_memory
+
+# 3) Python SDK
+from powercontext.client import PowerContextClient
+async with PowerContextClient("http://127.0.0.1:8000") as c:
+    await c.capture_content_source(request)
+    await c.search_memory(request)</code></pre>
+
+<h3>3.4 把「自动处理」打开</h3>
+<pre><code># 新增来源达到阈值就触发一次记忆处理（比等定时轮询更快）
+runtime:
+  memory_source_count_threshold: 1
+
+# 或者按固定周期处理
+runtime:
+  memory_schedule_seconds: 30</code></pre>
+
+<h2 id="s4">4. 动手：把两者接起来</h2>
+
+<h3>4.1 数据面：文档与向量存 seekdb</h3>
+<p>业务原文与向量放 seekdb：向量字段建索引，全文字段建全文索引，检索一次搞定。</p>
+<pre><code>CREATE TABLE kb.docs (
+  id        BIGINT PRIMARY KEY AUTO_INCREMENT,
+  title     VARCHAR(256) NOT NULL,
+  body      TEXT NOT NULL,
+  embedding VECTOR(4),
+  KEY ft_body (body) WITH PARSER ik
+);</code></pre>
+
+<h3>4.2 记忆面：结论存 PowerContext</h3>
+<p>每次排查完，把「问题 → 根因 → 证据 → 处置」写回 PowerContext，下次直接召回。</p>
+<pre><code>from powercontext.client import PowerContextClient
+from powercontext.client.client import CaptureContentSourceRequest
+
+async with PowerContextClient("http://127.0.0.1:8000") as c:
+    await c.capture_content_source(CaptureContentSourceRequest(
+        scope_id=scope_id,
+        source_id=f"incident-{ticket_id}",
+        content="现象：... 根因：... 证据：EXPLAIN ... 处置：...",
+    ))</code></pre>
+
+<h3>4.3 检索时合并两路</h3>
+<p>一个查询同时要「语义相近」和「关键词命中」时，让 seekdb 出混合结果，
+   再用 PowerContext 召回历史结论补上下文：</p>
+<pre><code>-- 第一路：seekdb 混合检索（语义 + 关键词 + 结构化条件）
+SELECT id, title, body FROM kb.docs
+ WHERE MATCH(title, body) AGAINST('索引')
+ ORDER BY l2_distance(embedding, :query_vec) APPROXIMATE
+ LIMIT 5;
+
+-- 第二路：PowerContext 召回历史结论
+hits = await c.search_memory(SearchMemoryRequest(scope_id=scope_id, query=q, limit=5))</code></pre>
+
+<h3>4.4 验证它真的在工作</h3>
+<p>别只看「跑通了」。三个必须实测的点：</p>
+<table>
+  <thead><tr><th>验证项</th><th>怎么做</th><th>合格线</th></tr></thead>
+  <tbody>
+    <tr><td>检索质量</td><td>固定评测集跑 Recall@10 / nDCG@10</td><td>与基线持平或更好</td></tr>
+    <tr><td>记忆真的被用上</td><td>写入一条记忆 → 新会话提问 → 看是否召回</td><td>能召回且答案引用了它</td></tr>
+    <tr><td>新增内容可被检索</td><td>写入 → 等索引刷新 → 检索</td><td>能命中新增内容</td></tr>
+  </tbody>
+</table>
+
+<h2 id="s5">5. 用 Qoder 把它变成产品</h2>
+<p>Qoder 的价值在这个项目里非常具体：<strong>它把「查文档、读代码、跑起来、再迭代」这条闭环压缩成对话</strong>。
+   下面每一步都可以直接交给 Qoder 执行。</p>
+
+<h3>5.1 让 Qoder 先摸清地形</h3>
+<pre><code># 给 Qoder 的第一句
+请阅读 seekdb 仓库的 docs 与 PowerContext 的 docs，
+列出：1) 建混合检索需要的最小表结构；2) 记忆写入与召回的完整接口；
+3) 我本地已经跑起来的 seekdb 实例该怎么连。不要改代码，先给方案。</code></pre>
+
+<h3>5.2 让它搭最小闭环</h3>
+<pre><code>按上面的方案实现一个最小可跑版本：
+- 一个 /search 接口，入参 query 和 top_k
+- seekdb 出混合检索结果，PowerContext 召回历史结论，两路合并后返回
+- 每条结果标注来源（文档 / 记忆）
+- 补一个可以一键跑的 seed 脚本和一个 smoke test</code></pre>
+
+<h3>5.3 用它做性能与质量迭代</h3>
+<p>把「优化」这件事也交给 Qoder，但要给它<strong>可验证的目标</strong>，否则它只会改代码：</p>
+<pre><code>在固定评测集上对比三种实现，记录 Recall@10 与 p50 延迟：
+A) 纯向量   B) 纯全文   C) 混合
+要求 C 的 Recall 不低于 A，p50 不高于 A 的 1.5 倍。
+把结果写成表格，只改真正有收益的那一项。</code></pre>
+
+<h3>5.4 提示词：让 Agent 知道自己是谁</h3>
+<pre><code>你是一个数据库排查助手。
+回答时：
+- 涉及数据库结论时，区分「本次实测」和「历史记忆」，不要混为一谈；
+- 历史记忆只在当前实例上验证过之后才可作为结论；
+- 没有依据的信息写「未核实」，不要编造；
+- 给结论时附上可复现的 SQL。</code></pre>
+
+<h2 id="s6">6. 踩坑清单与收尾</h2>
+<table>
+  <thead><tr><th>坑</th><th>表现</th><th>处理</th></tr></thead>
+  <tbody>
+    <tr><td>APPROXIMATE 悄悄掉召回</td><td>线上「搜不到」</td><td>用评测集量化 Recall，别凭感觉</td></tr>
+    <tr><td>记忆把旧结论当真</td><td>给出过时的处置建议</td><td>召回只当线索，落地前复核</td></tr>
+    <tr><td>索引没刷新就检索</td><td>新增内容搜不到</td><td>检索前确认刷新策略（写入后可见）</td></tr>
+    <tr><td>Scope 用混</td><td>记忆串味</td><td>按系统/服务分 scope，别共用</td></tr>
+    <tr><td>把密钥写进记忆</td><td>凭据泄漏</td><td>记忆只存结论与证据</td></tr>
+  </tbody>
+</table>
+
+<div class="card">
+  <strong>收尾自查</strong>
+  <ol>
+    <li>全新环境按 README 能起 seekdb 与 PowerContext 两套服务 ✓</li>
+    <li>seed 脚本能造出可检索的数据与一条可召回的记忆 ✓</li>
+    <li>smoke test 一条命令跑通「写入 → 召回 → 检索」 ✓</li>
+    <li>有一张 before/after 的质量与延迟对比表 ✓</li>
+  </ol>
+</div>
+
+<footer>
+  本教程配套的可运行实现见 Qoder 生成的工程目录；示例中的向量维度、路径与连接串均为占位值，请按你的环境替换。
+</footer>
+
+</div>
+</body>
+</html>

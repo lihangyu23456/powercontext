@@ -1,0 +1,226 @@
+app:
+  description: 一个会记住玩家恶作剧的灯塔看守 NPC。世界设定存在 seekdb，玩家的行为通过 PowerContext 记忆沉淀，跨会话也能被召回。
+  icon: "\U0001F5FF"
+  icon_background: '#EFF1F5'
+  name: 灯塔守夜人
+  use_icon_as_answer_icon: false
+kind: app
+version: 0.1.5
+workflow:
+  conversation_variables:
+  - description: 玩家的标识，用于在记忆里区分不同的人
+    id: 6f9c2b48-player
+    name: player
+    value: player-1
+  - description: 记忆的 scope 名，配套服务会把它解析成 scope id
+    id: 6f9c2b48-scope
+    name: scope
+    value: npc-game
+  features:
+    file_upload:
+      allowed_file_extensions: []
+      allowed_file_types: []
+      allowed_file_upload_methods: []
+      enabled: false
+      fileUploadConfig: {}
+      number_limits: 0
+    opening_statement: '（雾起了。灯塔的灯刚亮。）你来了。'
+    retriever_resource:
+      enabled: false
+    sensitive_word_avoidance:
+      enabled: false
+    speech_to_text:
+      enabled: false
+    suggested_questions: []
+    suggested_questions_after_answer:
+      enabled: false
+    text_to_speech:
+      enabled: false
+  graph:
+    edges:
+    - data:
+        isInIteration: false
+        sourceType: start
+        targetType: http-request
+      id: start-to-context
+      source: start
+      sourceHandle: source
+      target: context
+      targetHandle: target
+      type: custom
+    - data:
+        isInIteration: false
+        sourceType: http-request
+        targetType: llm
+      id: context-to-llm
+      source: context
+      sourceHandle: source
+      target: npc
+      targetHandle: target
+      type: custom
+    - data:
+        isInIteration: false
+        sourceType: llm
+        targetType: answer
+      id: llm-to-answer
+      source: npc
+      sourceHandle: source
+      target: answer
+      targetHandle: target
+      type: custom
+    nodes:
+    - data:
+        desc: 玩家的一句话
+        selected: false
+        title: 开始
+        type: start
+        variables:
+        - label: NPC
+          max_length: 48
+          options: []
+          required: true
+          type: select
+          value: 阿澜
+        - label: 玩家说
+          max_length: 512
+          options: []
+          required: true
+          type: paragraph-input
+          value: 我把灯塔的路灯全关了
+      height: 116
+      id: start
+      position:
+        x: 80
+        y: 180
+      positionAbsolute:
+        x: 80
+        y: 180
+      selected: false
+      sourcePosition: right
+      targetPosition: left
+      type: custom
+      width: 244
+    - data:
+        authorization:
+          config: null
+          type: no-auth
+        body:
+          data:
+          - id: body-npc
+            key: ''
+            type: text
+            value: '{{#start.npc#}}'
+          - id: body-player
+            key: ''
+            type: text
+            value: '{{#sys.query#}}'
+          - id: body-scope
+            key: ''
+            type: text
+            value: '{{#start.scope#}}'
+          - id: body-message
+            key: ''
+            type: text
+            value: '{{#sys.query#}}'
+          type: json
+        desc: 从 seekdb 取世界设定，从 PowerContext 召回并写入这一轮记忆
+        headers: []
+        method: post
+        params: ''
+        retry_config:
+          max_retries: 2
+          retry_enabled: true
+          retry_interval: 1000
+        selected: false
+        title: 取设定与记忆
+        type: http-request
+        url: http://127.0.0.1:8002/npc/turn
+        variables: []
+      height: 148
+      id: context
+      position:
+        x: 400
+        y: 180
+      positionAbsolute:
+        x: 400
+        y: 180
+      selected: false
+      sourcePosition: right
+      targetPosition: left
+      type: custom
+      width: 244
+    - data:
+        context:
+        - id: context-setting
+          label: 世界设定
+          value: '{{#context.body#}}'
+          variable_selector:
+          - conversation
+          - npc-context
+        - id: context-memories
+          label: 玩家的记忆
+          value: '{{#context.body#}}'
+          variable_selector:
+          - conversation
+          - npc-memories
+        desc: 让 NPC 按人设作答
+        model:
+          completion_params:
+            max_tokens: 512
+            temperature: 0.7
+          mode: chat
+          name: qwen-plus
+          provider: tongyi
+        prompt_template:
+        - id: prompt-persona
+          role: system
+          text: |-
+            你是{{#start.npc#}}，{{#context-setting#}}
+
+            说话克制、先描述环境再回答问题。玩家做的事你不会责怪，但会记住并在下一次提起。
+            玩家的记忆：{{#context-memories#}}
+            只用上面给出的设定与记忆，缺失的信息说「我不清楚」，不要编造。
+        - id: prompt-user
+          role: user
+          text: '{{#sys.query#}}'
+        selected: false
+        title: NPC 作答
+        type: llm
+        variables: []
+      height: 98
+      id: npc
+      position:
+        x: 720
+        y: 180
+      positionAbsolute:
+        x: 720
+        y: 180
+      selected: false
+      sourcePosition: right
+      targetPosition: left
+      type: custom
+      width: 244
+    - data:
+        answer: '{{#npc.text#}}'
+        desc: ''
+        selected: false
+        title: 回答
+        type: answer
+        variables: []
+      height: 90
+      id: answer
+      position:
+        x: 1040
+        y: 180
+      positionAbsolute:
+        x: 1040
+        y: 180
+      selected: false
+      sourcePosition: right
+      targetPosition: left
+      type: custom
+      width: 244
+    viewport:
+      x: 0
+      y: 0
+      zoom: 1
